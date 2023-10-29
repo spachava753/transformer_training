@@ -34,6 +34,7 @@ import datasets
 import evaluate
 import torch
 from datasets import load_dataset
+from datasets.fingerprint import Hasher
 
 import transformers
 from transformers import (
@@ -56,9 +57,9 @@ from transformers.utils.versions import require_version
 
 
 # Will error if the minimal version of Transformers is not installed. Remove at your own risks.
-check_min_version("4.35.0.dev0")
+check_min_version("4.34.0")
 
-require_version("datasets>=1.8.0", "To fix: pip install -r examples/pytorch/language-modeling/requirements.txt")
+require_version("datasets>=2.14.0", "To fix: pip install -r requirements.txt")
 
 logger = logging.getLogger(__name__)
 
@@ -222,6 +223,16 @@ class DataTrainingArguments:
     preprocessing_num_workers: Optional[int] = field(
         default=None,
         metadata={"help": "The number of processes to use for the preprocessing."},
+    )
+    batch_size: Optional[int] = field(
+        default=1000,
+        metadata={
+            "help": (
+                "Number of examples per batch provided to function if batched=True. "
+                "If batch_size <= 0 or batch_size == None, provide the full dataset as a single batch to function. "
+                "This parameter is mostly useful to control batch size to fast tokenizers"
+            )
+        },
     )
     keep_linebreaks: bool = field(
         default=True, metadata={"help": "Whether to keep line breaks when using TXT files or not."}
@@ -431,6 +442,9 @@ def main():
             "You can do it from another script, save it, and load it from here, using --tokenizer_name."
         )
 
+    if tokenizer.is_fast:
+        logger.info("using fast tokenizer")
+
     if model_args.model_name_or_path:
         torch_dtype = (
             model_args.torch_dtype
@@ -481,11 +495,14 @@ def main():
             )
         return output
 
+    logger.info(f"fingerprint of tokenize_function: {Hasher.hash(tokenize_function)}")
+    
     with training_args.main_process_first(desc="dataset map tokenization"):
         if not data_args.streaming:
             tokenized_datasets = raw_datasets.map(
                 tokenize_function,
                 batched=True,
+                batch_size=data_args.batch_size,
                 num_proc=data_args.preprocessing_num_workers,
                 remove_columns=column_names,
                 load_from_cache_file=not data_args.overwrite_cache,
@@ -495,6 +512,7 @@ def main():
             tokenized_datasets = raw_datasets.map(
                 tokenize_function,
                 batched=True,
+                batch_size=data_args.batch_size,
                 remove_columns=column_names,
             )
 
