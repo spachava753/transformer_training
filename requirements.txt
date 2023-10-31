@@ -6,3 +6,4 @@ protobuf
 evaluate
 scikit-learn
 transformers >= 4.34.0
+optimum >= 1.13.0
