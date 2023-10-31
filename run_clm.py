@@ -50,6 +50,7 @@ from transformers import (
     is_torch_tpu_available,
     set_seed,
 )
+from transformers.trainer_utils import get_last_checkpoint
 from transformers.testing_utils import CaptureLogger
 from transformers.utils import check_min_version, send_example_telemetry
 from transformers.utils.versions import require_version
@@ -156,6 +157,10 @@ class ModelArguments:
             )
         },
     )
+    better_transformer: bool = field(
+        default=False,
+        metadata={"help": "Convert model to better transformer. Note that the model will automatically be reversed before saving"},
+    )
 
     def __post_init__(self):
         if self.config_overrides is not None and (self.config_name is not None or self.model_name_or_path is not None):
@@ -199,6 +204,13 @@ class DataTrainingArguments:
 
         if self.dataset_path is None:
             raise ValueError("Need a dataset path to a training/validation file.")
+
+class CustomTrainer(Trainer):
+    def save_model(self, output_dir: Optional[str] = None, _internal_call: bool = False, _better_transformer: bool = False):
+        if _better_transformer:
+            logger.info("reversing from better transformer")
+            self.model = self.model.reverse_bettertransformer()
+        super().save_model(output_dir, _internal_call)
 
 def main():
     # See all possible arguments in src/transformers/training_args.py
@@ -338,6 +350,10 @@ def main():
     if len(tokenizer) > embedding_size:
         model.resize_token_embeddings(len(tokenizer))
 
+    if model_args.better_transformer:
+        logger.info("converting to better transformer")
+        model = model.to_bettertransformer()
+
     if training_args.do_train:
         if "train" not in lm_datasets:
             raise ValueError("--do_train requires a train dataset")
@@ -372,7 +388,7 @@ def main():
             return metric.compute(predictions=preds, references=labels)
 
     # Initialize our Trainer
-    trainer = Trainer(
+    trainer = CustomTrainer(
         model=model,
         args=training_args,
         train_dataset=train_dataset if training_args.do_train else None,
@@ -393,8 +409,9 @@ def main():
             checkpoint = training_args.resume_from_checkpoint
         elif last_checkpoint is not None:
             checkpoint = last_checkpoint
+        torch._dynamo.config.optimize_ddp=False
         train_result = trainer.train(resume_from_checkpoint=checkpoint)
-        trainer.save_model()  # Saves the tokenizer too for easy upload
+        trainer.save_model(_better_transformer=model_args.better_transformer)  # Saves the tokenizer too for easy upload
 
         metrics = train_result.metrics
 
