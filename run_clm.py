@@ -209,7 +209,6 @@ class DataTrainingArguments:
 
 class CustomTrainer(Trainer):
     def save_model(self, output_dir: Optional[str] = None, _internal_call: bool = False, _better_transformer: bool = False):
-        logger.info("calling custom save_model")
         if _better_transformer:
             logger.info("reversing from better transformer")
             self.model = self.model.reverse_bettertransformer()
@@ -353,11 +352,9 @@ def main():
     if len(tokenizer) > embedding_size:
         model.resize_token_embeddings(len(tokenizer))
 
-    logger.info(f"model: {model}")
     if model_args.better_transformer:
         logger.info("converting to better transformer")
         model = model.to_bettertransformer()
-        logger.info(f"better transformer model: {model}")
 
     if training_args.do_train:
         if "train" not in lm_datasets:
@@ -407,9 +404,6 @@ def main():
         else None
     )
 
-    logger.info(f"trainer transformer model: {trainer.model}")
-    logger.info(f"trainer transformer model_wrapped: {trainer.model_wrapped}")
-
     # Training
     if training_args.do_train:
         checkpoint = None
@@ -452,13 +446,13 @@ def main():
         trainer.save_metrics("eval", metrics)
 
     kwargs = {"finetuned_from": model_args.model_name_or_path, "tasks": "text-generation"}
-    if data_args.dataset_name is not None:
-        kwargs["dataset_tags"] = data_args.dataset_name
-        if data_args.dataset_config_name is not None:
-            kwargs["dataset_args"] = data_args.dataset_config_name
-            kwargs["dataset"] = f"{data_args.dataset_name} {data_args.dataset_config_name}"
-        else:
-            kwargs["dataset"] = data_args.dataset_name
+    # if data_args.dataset_name is not None:
+    #     kwargs["dataset_tags"] = data_args.dataset_name
+    #     if data_args.dataset_config_name is not None:
+    #         kwargs["dataset_args"] = data_args.dataset_config_name
+    #         kwargs["dataset"] = f"{data_args.dataset_name} {data_args.dataset_config_name}"
+    #     else:
+    #         kwargs["dataset"] = data_args.dataset_name
 
     if training_args.push_to_hub:
         trainer.push_to_hub(**kwargs)
