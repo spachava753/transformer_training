@@ -55,6 +55,8 @@ from transformers.testing_utils import CaptureLogger
 from transformers.utils import check_min_version, send_example_telemetry
 from transformers.utils.versions import require_version
 
+from typing import TYPE_CHECKING, Any, Callable, Dict, List, Optional, Tuple, Union
+
 
 # Will error if the minimal version of Transformers is not installed. Remove at your own risks.
 check_min_version("4.34.0")
@@ -207,6 +209,7 @@ class DataTrainingArguments:
 
 class CustomTrainer(Trainer):
     def save_model(self, output_dir: Optional[str] = None, _internal_call: bool = False, _better_transformer: bool = False):
+        logger.info("calling custom save_model")
         if _better_transformer:
             logger.info("reversing from better transformer")
             self.model = self.model.reverse_bettertransformer()
@@ -350,9 +353,11 @@ def main():
     if len(tokenizer) > embedding_size:
         model.resize_token_embeddings(len(tokenizer))
 
+    logger.info(f"model: {model}")
     if model_args.better_transformer:
         logger.info("converting to better transformer")
         model = model.to_bettertransformer()
+        logger.info(f"better transformer model: {model}")
 
     if training_args.do_train:
         if "train" not in lm_datasets:
@@ -402,6 +407,9 @@ def main():
         else None
     )
 
+    logger.info(f"trainer transformer model: {trainer.model}")
+    logger.info(f"trainer transformer model_wrapped: {trainer.model_wrapped}")
+
     # Training
     if training_args.do_train:
         checkpoint = None
@@ -411,6 +419,8 @@ def main():
             checkpoint = last_checkpoint
         torch._dynamo.config.optimize_ddp=False
         train_result = trainer.train(resume_from_checkpoint=checkpoint)
+        logger.info(f"trainer trained transformer model: {trainer.model}")
+        logger.info(f"trainer trained transformer model_wrapped: {trainer.model_wrapped}")
         trainer.save_model(_better_transformer=model_args.better_transformer)  # Saves the tokenizer too for easy upload
 
         metrics = train_result.metrics
