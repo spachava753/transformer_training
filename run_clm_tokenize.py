@@ -220,6 +220,10 @@ class DataTrainingArguments:
             "help": "The percentage of the train set used as validation set in case there's no validation split"
         },
     )
+    loading_num_workers: Optional[int] = field(
+        default=None,
+        metadata={"help": "The number of processes to use when loading."},
+    )
     preprocessing_num_workers: Optional[int] = field(
         default=None,
         metadata={"help": "The number of processes to use for the preprocessing."},
@@ -241,6 +245,9 @@ class DataTrainingArguments:
     def __post_init__(self):
         if self.streaming:
             require_version("datasets>=2.0.0", "The streaming feature requires `datasets>=2.0.0`")
+
+        if self.loading_num_workers:
+            require_version("datasets>=2.7.0", "The multiprocess loading feature requires `datasets>=2.7.0`")
 
         if self.dataset_name is None and self.train_file is None and self.validation_file is None:
             raise ValueError("Need either a dataset name or a training/validation file.")
@@ -340,6 +347,7 @@ def main():
             cache_dir=model_args.cache_dir,
             token=model_args.token,
             streaming=data_args.streaming,
+            num_proc=data_args.loading_num_workers if data_args.loading_num_workers else 1
         )
         if "validation" not in raw_datasets.keys():
             raw_datasets["validation"] = load_dataset(
@@ -349,6 +357,7 @@ def main():
                 cache_dir=model_args.cache_dir,
                 token=model_args.token,
                 streaming=data_args.streaming,
+                num_proc=data_args.loading_num_workers if data_args.loading_num_workers else 1
             )
             raw_datasets["train"] = load_dataset(
                 data_args.dataset_name,
@@ -357,6 +366,7 @@ def main():
                 cache_dir=model_args.cache_dir,
                 token=model_args.token,
                 streaming=data_args.streaming,
+                num_proc=data_args.loading_num_workers if data_args.loading_num_workers else 1
             )
     else:
         data_files = {}
@@ -503,7 +513,7 @@ def main():
             tokenize_function,
             batched=True,
             batch_size=data_args.batch_size,
-            num_proc=data_args.preprocessing_num_workers,
+            num_proc=None if tokenizer.is_fast else data_args.preprocessing_num_workers,
             remove_columns=column_names,
             load_from_cache_file=not data_args.overwrite_cache,
             desc="Running tokenizer on dataset",
