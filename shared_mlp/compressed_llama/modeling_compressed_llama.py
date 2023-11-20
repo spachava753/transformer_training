@@ -1,6 +1,8 @@
 from transformers import PreTrainedModel
 from transformers.models.llama.modeling_llama import LlamaDecoderLayer, LlamaRMSNorm
 from transformers.modeling_outputs import BaseModelOutputWithPast, CausalLMOutputWithPast
+from transformers.utils import logging
+from transformers.modeling_attn_mask_utils import AttentionMaskConverter, _prepare_4d_causal_attention_mask
 
 import torch
 import torch.nn.functional as F
@@ -11,6 +13,8 @@ from torch.nn import BCEWithLogitsLoss, CrossEntropyLoss, MSELoss
 from typing import List, Optional, Tuple, Union
 
 from .configuration_compressed_llama import CompressedLlamaConfig
+
+logger = logging.get_logger(__name__)
 
 class CompressedLlamaPreTrainedModel(PreTrainedModel):
     config_class = CompressedLlamaConfig
@@ -46,6 +50,24 @@ class CompressedLlamaModel(CompressedLlamaPreTrainedModel):
 
         self.embed_tokens = nn.Embedding(config.vocab_size, config.hidden_size, self.padding_idx)
         self.layers = nn.ModuleList([LlamaDecoderLayer(config) for _ in range(config.num_hidden_layers)])
+        
+        # Now, share the MLP layers based on the config
+        if isinstance(config.share_layers, str):
+            if config.share_layers == "all":
+                # Share all layers with a single MLP
+                shared_mlp = self.layers[0].mlp
+                for layer in self.layers:
+                    layer.mlp = shared_mlp
+        
+        elif isinstance(config.share_layers, list):
+            # Share specific layers with each other
+            logging.critical("fine-grained layer sharing not yet supported!")
+            raise NotImplementedError(f"fine-grained layer sharing not yet supported, config: {config.share_layers}")
+        
+        else:
+            # Handle unexpected types, though this shouldn't happen due to your init checks
+            print("Unexpected value for share_layers.")
+
         self.norm = LlamaRMSNorm(config.hidden_size, eps=config.rms_norm_eps)
 
         self.gradient_checkpointing = False
