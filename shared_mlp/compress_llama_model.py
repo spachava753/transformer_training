@@ -111,11 +111,6 @@ def main():
                                    use_cache=True,
                                    vocab_size=32000)
     
-    
-    CompressedLlamaConfig.register_for_auto_class()
-    CompressedLlamaModel.register_for_auto_class("AutoModel")
-    CompressedLlamaForCausalLM.register_for_auto_class("AutoModelForCausalLM")
-    
     model = CompressedLlamaForCausalLM(config)
 
     # TODO: modify state_dict loading to account for compression
