@@ -78,6 +78,17 @@ class ScriptArguments:
         },
     )
 
+def compress_all(compressed_model, model):
+    single_shared_mlp = compressed_model.model.layers[0].mlp
+    cloned_mlp_state_dict = {name: param.clone() for name, param in model.model.layers[0].mlp.state_dict().items()}
+    single_shared_mlp.load_state_dict(cloned_mlp_state_dict)
+    for layer in open_llama_model.model.layers[1:]:
+        ss_sd = single_shared_mlp.state_dict()
+        lm_sd = layer.mlp.state_dict()
+        new_sd = {key: (ss_sd[key] + lm_sd[key]) / 2.0 for key in ss_sd}
+        single_shared_mlp.load_state_dict(new_sd)
+    single_shared_mlp.state_dict()
+
 def main():
     parser = HfArgumentParser((ScriptArguments))
     if len(sys.argv) == 2 and sys.argv[1].endswith(".json"):
@@ -113,8 +124,12 @@ def main():
     
     model = CompressedLlamaForCausalLM(config)
 
-    # TODO: modify state_dict loading to account for compression
+    # load all of the rest of the parameter weights
     model.load_state_dict(imported_model.state_dict())
+
+    # TODO: add support for compressing specific layers
+    if share_layers == 'all':
+        compress_all(model)
     
     model.push_to_hub(script_args.repo_id, commit_message=script_args.commit_message)
 
